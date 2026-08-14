@@ -1,0 +1,21 @@
+{
+  "name": "dsh-balance-widget",
+  "description": "DeepSeek 账户余额显示：会话头部常驻余额徽章，服务器端 /api/balance 路由代理官方余额查询",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}

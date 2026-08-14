@@ -1,0 +1,21 @@
+# temp / build artifacts
+*.tmp
+.tmp-*
+*.bak
+*.orig.bak
+.bak-*
+
+# python
+__pycache__/
+*.pyc
+
+# node
+node_modules/
+
+# local test audio
+tools/*.mp3
+
+# local shots / previews (dev only)
+shots/
+preview.mjs
+preview.html
