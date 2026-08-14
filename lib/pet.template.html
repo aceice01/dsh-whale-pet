@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>DeepSeek 鲸鱼娘 v19</title>
+<title>DeepSeek 鲸鱼娘 v21</title>
 <style>
   html, body {
     background: transparent;
@@ -236,7 +236,7 @@
 </style>
 </head>
 <body class="idle">
-  <div id="ver">whale-v19</div>
+  <div id="ver">whale-v21</div>
   <div id="stage">
     <div id="bubble">任务完成啦！✨</div>
     <div id="muteHint"></div>
@@ -562,6 +562,7 @@
     });
   }
 
+  var edgeAvailable = true; // whether the online Edge TTS endpoint is reachable
   function edgeSpeak(text) {
     return new Promise(function (resolve) {
       diag("edge: try speak");
@@ -697,11 +698,12 @@
     ]
   };
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  var bubbleTimer = null;
   function showBubble(text, ms) {
     bubble.textContent = text;
     bubble.classList.add("show");
-    if (celebrateTimer) clearTimeout(celebrateTimer);
-    celebrateTimer = setTimeout(function () {
+    if (bubbleTimer) clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(function () {
       bubble.classList.remove("show");
     }, ms || 3200);
   }
@@ -807,6 +809,7 @@
     showBubble(line, 3000);
     speak(line);
     if (coquetryTimer) clearTimeout(coquetryTimer);
+    if (celebrateTimer) clearTimeout(celebrateTimer);
     coquetryTimer = setTimeout(function () { setMode("idle"); }, 3000);
   }
   function sad(fromPoke) {
@@ -815,6 +818,7 @@
     var line = pick(LINES.sad);
     showBubble(line, 3000);
     if (!fromPoke) speak(line);
+    if (coquetryTimer) { clearTimeout(coquetryTimer); coquetryTimer = null; }
     if (celebrateTimer) clearTimeout(celebrateTimer);
     celebrateTimer = setTimeout(function () { setMode("idle"); }, 3000);
   }
@@ -961,6 +965,7 @@
     clickTimer = setTimeout(function () {
       if (!pendingClick) return;
       pendingClick = false;
+      if (longPressFired) { longPressFired = false; return; } // long-press already reacted
       playPoke();
       poke();
     }, 280);
@@ -968,9 +973,11 @@
   /* long-press on the hat: happy jump reaction + line */
   var longPressTimer = null;
   var longPressFired = false;
+  var longPressStartX = 0, longPressStartY = 0;
   petHit.addEventListener("mousedown", function (e) {
     if (e.button !== 0) return;
     longPressFired = false;
+    longPressStartX = e.clientX; longPressStartY = e.clientY;
     longPressTimer = setTimeout(function () {
       longPressFired = true;
       pendingClick = false;
@@ -984,8 +991,21 @@
       celebrateTimer = setTimeout(function () { setMode("idle"); }, 2600);
     }, 700);
   });
+  petHit.addEventListener("mousemove", function (e) {
+    // moving more than a few px cancels the long-press (it's a drag, not a headpat)
+    if (longPressTimer && (Math.abs(e.clientX - longPressStartX) > 5 || Math.abs(e.clientY - longPressStartY) > 5)) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
   petHit.addEventListener("mouseup", function () {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    // if the long-press already fired, make sure the flag is reset so a later
+    // normal click is not swallowed; the click handler also resets it, but this
+    // covers the case where no click event follows the long-press.
+    if (longPressFired) {
+      setTimeout(function () { longPressFired = false; }, 400);
+    }
   });
   petHit.addEventListener("dblclick", function (e) {
     e.stopPropagation();
@@ -1021,7 +1041,9 @@
     }
 
     if (status.status === "running") {
-      if (!body.classList.contains("running") && !body.classList.contains("coquetry") && !body.classList.contains("sad")) {
+      // keep transient user-triggered states visible; only force "running"
+      // when not poking / celebrating / upset
+      if (!body.classList.contains("running") && !body.classList.contains("coquetry") && !body.classList.contains("sad") && !body.classList.contains("happy")) {
         setMode("running");
         if (status.lastTool && Math.random() < 0.4) {
           showBubble("正在用「" + status.lastTool.name + "」忙活中…", 2600);
@@ -1049,7 +1071,7 @@
   }
 
   /* ---------------- self-update (cache-busting reload) ---------------- */
-  var CURRENT_VERSION = "whale-v19";
+  var CURRENT_VERSION = "whale-v21";
   setInterval(function () {
     fetch("/pet.html?" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (t) {
       var m = t.match(/id="ver">([^<]+)</);

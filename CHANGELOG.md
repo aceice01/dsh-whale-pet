@@ -23,6 +23,15 @@
   Multiline，默认 profile（带注释头）下匹配失败，`[]` 残留导致
   `[] ... - insert:` 文档损坏、插件不加载。改为按行扫描删除 `[]` 行，
   并在写入后用 YAML 解析校验（失败自动回滚备份）
+- 🐛 **长按摸头被松手单击覆盖**：长按 700ms 触发摸头后，松手触发 click
+  再 poke，把摸头覆盖成撒娇。click handler 检测 `longPressFired` 跳过；
+  长按期间移动 >5px 取消长按
+- 🐛 **气泡显示与状态恢复共用 timer**：`showBubble` 复用 `celebrateTimer`
+  隐藏气泡，会覆盖状态恢复 timer，导致桌宠卡死在 happy/coquetry 状态。
+  分离出独立的 `bubbleTimer`
+- 🐛 **`edgeAvailable` 未声明**：严格模式下 `ws.onerror` 赋值给未声明变量
+  抛 ReferenceError，edgeSpeak 可能卡住。补声明
+- 🛡️ **poll 轮询保护 happy 状态**：任务进行中不再打断摸头/庆祝动画
 
 [issue #1]: https://github.com/aceice01/dsh-whale-pet/issues/1
 
