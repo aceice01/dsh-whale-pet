@@ -4,13 +4,23 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+> ⚠️ 本项目是**非官方同人项目**，与 DeepSeek 官方无隶属或背书关系，
+> **不用于商业用途**。
+
 ## [未发布]
+
+### 新增
+
+- 🩹 **main.js 补丁**（`apply-main-patch.ps1` + `patch/`）：修复关闭 DSH Desktop
+  主窗口时桌宠窗口不随之关闭、残留在屏幕上的问题
+- ⚠️ **非官方同人声明**：README / LICENSE / CONTRIBUTING 均加入免责声明
+- 📄 **许可调整**：MIT → **非商业性使用许可**（禁止商业用途）
 
 ## [0.1.0] - 2026-08-14
 
 ### 新增
 
-- 🐋 **鲸鱼娘桌宠**：DeepSeek 官方动画素材，蓝发女仆 + 鲸鱼尾，透明背景
+- 🐋 **鲸鱼娘桌宠**：DeepSeek 鲸鱼娘同人动画素材（社区开源），蓝发女仆 + 鲸鱼尾，透明背景
 - 🖥️ **桌面版**：DSH Desktop 右下角独立透明置顶小窗
 - 🌐 **Web 版**：dsh web 页面右下角悬浮层（iframe + postMessage 拖动桥接）
 - 🗣️ **晓伊神经网络语音**：49 条台词预合成（edge-tts），离线播放

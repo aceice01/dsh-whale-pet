@@ -15,13 +15,19 @@
   <img alt="Lines" src="https://img.shields.io/badge/lines-49-9cf">
 </p>
 
+> ⚠️ **免责声明**
+>
+> 这是一个**非官方同人项目**，与 DeepSeek 官方（深度求索）**无隶属或背书关系**。
+> 本项目**不用于商业用途**。角色素材版权归原作者所有（见文末致谢），
+> 使用 DeepSeek 品牌名称仅为指明所适配的工具，不构成任何官方授权或关联。
+
 ---
 
 ## ✨ 功能
 
 | 功能 | 说明 |
 |---|---|
-| 🐋 官方形象 | DeepSeek 鲸鱼娘动画（透明背景，已去绿幕/品红残留） |
+| 🐋 同人形象 | DeepSeek 鲸鱼娘同人动画（透明背景，已去绿幕/品红残留） |
 | 🎞️ 状态动画 | 待机 / 工作 / 完成 / 出错 / 撒娇 / 跳跃，待机变体轮换 |
 | 🗣️ 晓伊语音 | 神经网络人声，49 条台词预合成，完全离线播放 |
 | 🥰 互动 | 戳一戳随机反应 · 长按摸头 · 双击静音 · 右键菜单 · 三击诊断 |
@@ -64,6 +70,21 @@ install.ps1 -Target web       # 只装 Web 版
 install.ps1 -Uninstall        # 卸载
 install.ps1 -DryRun           # 预览，不实际改动
 ```
+
+### （可选）应用 main.js 补丁 —— 修复"关闭客户端桌宠不消失"
+
+DSH Desktop 原版 main.js 有一个小问题：关闭主窗口时桌宠窗口不会同步关闭，
+桌宠会残留在屏幕上。`apply-main-patch.ps1` 提供修复（让桌宠随主窗口一起关闭）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apply-main-patch.ps1          # 应用补丁
+powershell -ExecutionPolicy Bypass -File apply-main-patch.ps1 -Revert # 还原
+powershell -ExecutionPolicy Bypass -File apply-main-patch.ps1 -DryRun # 预览
+```
+
+> 如果 DSH Desktop 装在 `C:\Program Files`，需要**以管理员身份**运行 PowerShell。
+> 补丁会备份原 main.js（`patch/main.js.original`），可随时还原。
+> 应用后重启 DSH Desktop 生效。
 
 ## 🎮 使用
 
@@ -142,8 +163,12 @@ python tools/defringe.py   # 去品红残留（白背景下边缘干净）
 
 ```
 dsh-whale-pet/
-├── install.ps1            # 一键安装/卸载（支持 -Target / -DryRun）
-├── docs/preview.png       # 项目预览图
+├── install.ps1              # 一键安装/卸载（支持 -Target / -DryRun）
+├── apply-main-patch.ps1     # （可选）main.js 补丁：修复关闭客户端桌宠不消失
+├── docs/preview.png         # 项目预览图
+├── patch/
+│   ├── main.js              # 补丁后的 main.js
+│   └── main.js.original     # 原版 main.js（用于还原）
 ├── plugin/
 │   └── dsh-balance-widget/  # 桌宠插件
 │       ├── package.json
@@ -157,6 +182,15 @@ dsh-whale-pet/
     ├── despill.py         # 去绿幕残留
     └── defringe.py        # 去品红残留
 ```
+
+## 📄 License
+
+**非商业性使用许可**（Non-Commercial Use License）
+
+- ✅ 允许：个人使用、学习、非商业性分享
+- ❌ 禁止：商业用途、未经原作者许可的二次分发
+- 角色素材版权归原作者所有（见致谢）；DeepSeek 名称仅用于指明所适配的工具，
+  与 DeepSeek 官方无隶属或背书关系
 
 ## ❓ FAQ
 
@@ -174,10 +208,6 @@ dsh-whale-pet/
 - Web 版需确认 iframe 未被广告拦截器屏蔽
 
 **如何参与贡献？** 见 [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## 📄 License
-
-[MIT](LICENSE)
 
 ## 🙏 致谢
 
