@@ -16,6 +16,16 @@
 - ⚠️ **非官方同人声明**：README / LICENSE / CONTRIBUTING 均加入免责声明
 - 📄 **许可调整**：MIT → **非商业性使用许可**（禁止商业用途）
 
+### 修复
+
+- 🐛 **install.ps1：`cordis.patch.yml` 生成无效 YAML**（[issue #1]）——
+  旧代码用 `-replace '^\s*\[\]\s*$'` 删除 `[]` 占位符，但该正则未启用
+  Multiline，默认 profile（带注释头）下匹配失败，`[]` 残留导致
+  `[] ... - insert:` 文档损坏、插件不加载。改为按行扫描删除 `[]` 行，
+  并在写入后用 YAML 解析校验（失败自动回滚备份）
+
+[issue #1]: https://github.com/aceice01/dsh-whale-pet/issues/1
+
 ## [0.1.0] - 2026-08-14
 
 ### 新增

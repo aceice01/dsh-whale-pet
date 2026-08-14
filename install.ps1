@@ -188,13 +188,37 @@ foreach ($t in $SelectedTargets) {
             Copy-Item $patch $bak -Force
             Ok "patch backed up to: $bak"
         }
-        # strip a bare "[]" placeholder, then append our insert block
-        $patchContent = $patchContent -replace '^\s*\[\]\s*$', ''
+        # Remove a bare "[]" placeholder line, then append our insert block.
+        # NOTE: line-by-line scan, NOT -replace without Multiline — the default
+        # profile's patch file starts with comment lines before "[]", so an
+        # anchored whole-string regex would miss it and leave an invalid
+        # "[] ... - insert:" document behind.
+        $lines = $patchContent -split "\r?\n" | Where-Object { $_.Trim() -ne '[]' }
+        $patchContent = $lines -join "`r`n"
         $patchContent = $patchContent.TrimEnd()
         if ($patchContent.Length -gt 0) { $patchContent += "`r`n`r`n" }
         $patchContent += $insertBlock
         Set-Content $patch $patchContent -Encoding UTF8 -NoNewline
-        Ok "balance-widget enabled in $patch"
+        # Verify the resulting patch parses as YAML; if not, restore the backup.
+        $yamlOk = $false
+        $pyOut = & python -c "import sys,yaml; yaml.safe_load(open(sys.argv[1],encoding='utf-8')); print('OK')" $patch 2>&1
+        if ($LASTEXITCODE -eq 0 -and $pyOut -match 'OK') {
+            $yamlOk = $true
+        } else {
+            # fallback structural check (no python): ensure no "[]" placeholder
+            # is still sitting in front of our insert block
+            $raw = Get-Content $patch -Raw -Encoding UTF8
+            $yamlOk = -not ($raw -match '(?ms)^\s*\[\]\s*$' -and $raw -match '^\s*- insert:')
+        }
+        if ($yamlOk) {
+            Ok "balance-widget enabled in $patch (YAML verified)"
+        } else {
+            Fail "cordis.patch.yml may be invalid after edit!"
+            if (Test-Path $bak) {
+                Copy-Item $bak $patch -Force
+                Fail "restored previous patch from backup: $bak"
+            }
+        }
     }
 }
 
