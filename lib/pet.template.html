@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek 鲸鱼娘 v19</title>
+<style>
+  html, body {
+    background: transparent;
+    margin: 0;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  /* whole window is draggable; the small hit zone below is no-drag so the
+     pet can be moved by dragging anywhere except the interactive center.
+     While the context menu is open the whole window becomes no-drag so any
+     click anywhere (even on the body) can close the menu. */
+  #stage {
+    position: fixed;
+    inset: 0;
+    -webkit-app-region: drag;
+    cursor: grab;
+  }
+  body.menu-open #stage,
+  body.menu-open #petWrap {
+    -webkit-app-region: no-drag;
+  }
+  /* ---- speech bubble ---- */
+  #bubble {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    color: #1f2a44;
+    border: 2px solid #7aa8f0;
+    border-radius: 14px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 184px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 4px 16px rgba(31, 42, 68, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+    transform: translateX(-50%) translateY(-6px);
+    z-index: 10;
+  }
+  #bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #bubble:after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    margin-left: -8px;
+    border: 8px solid transparent;
+    border-top-color: #ffffff;
+  }
+  /* ---- pet ---- */
+  /* The whole pet is a drag region — grab ANY part of her (face, chest, tail)
+     to move the window. The only no-drag interactive zone is the small hat
+     area on top of her head (click = coquetry, double-click = mute), so it
+     never blocks body dragging. */
+  #petWrap {
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 204px;
+    -webkit-app-region: drag;
+  }
+  #petWrap img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    image-rendering: auto;
+    pointer-events: none;
+  }
+  #petWrap.bob img { animation: bob 3.4s ease-in-out infinite; }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  #petWrap.jump img { animation: jump .7s ease-in-out; }
+  @keyframes jump {
+    0% { transform: translateY(0) scale(1); }
+    40% { transform: translateY(-14px) scale(1.05); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  /* interactive hot zone: small hat area (top of head), no-drag for clicks */
+  #petHit {
+    position: absolute;
+    left: 37%;
+    top: 4%;
+    width: 26%;
+    height: 16%;
+    -webkit-app-region: no-drag;
+    cursor: pointer;
+  }
+  /* visual hint ring when hovering the hat zone */
+  #petHit:hover { background: rgba(255, 255, 255, 0.25); border-radius: 10px; }
+
+  /* ---- custom context menu (right-click on the hat zone) ---- */
+  /* full-window transparent backdrop under the menu: clicking anywhere else
+     hits this no-drag layer (Electron reliably dispatches to no-drag children
+     inside a drag region) and closes the menu. */
+  #menuBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    display: none;
+    -webkit-app-region: no-drag;
+    cursor: default;
+  }
+  #menuBackdrop.show { display: block; }
+  #ctxMenu {
+    position: fixed;
+    z-index: 20;
+    min-width: 150px;
+    max-width: 208px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid #d4ddf0;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(31, 42, 68, 0.22);
+    padding: 4px;
+    display: none;
+    font-size: 12px;
+    color: #1f2a44;
+    -webkit-app-region: no-drag;
+  }
+  #ctxMenu.show { display: block; }
+  #ctxMenu .cm-title {
+    padding: 4px 10px 6px;
+    font-size: 11px;
+    color: #8b96b8;
+    border-bottom: 1px solid #eef2fa;
+    margin-bottom: 4px;
+    white-space: nowrap;
+  }
+  #ctxMenu .cm-item {
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #ctxMenu .cm-item:hover { background: #eaf1ff; }
+  #ctxMenu .cm-item .cm-ico { font-size: 13px; }
+  #ctxMenu .cm-vol-row { display: flex; align-items: center; gap: 6px; padding-right: 6px; }
+  #ctxMenu .cm-vol-row input[type="range"] { flex: 1; min-width: 70px; height: 4px; accent-color: #4a7cf0; cursor: pointer; }
+  #ctxMenu .cm-vol-row b { color: #4a7cf0; font-size: 11px; min-width: 30px; text-align: right; }
+  /* confetti */
+  #confetti { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  body.happy #confetti { opacity: 1; }
+  .cf {
+    position: absolute;
+    width: 6px; height: 9px; border-radius: 2px;
+    animation: confettiFly 1.4s ease-out infinite;
+  }
+  @keyframes confettiFly {
+    0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translateY(-46px) rotate(200deg) scale(0.4); opacity: 0; }
+  }
+  /* hearts */
+  #hearts { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  body.coquetry #hearts { opacity: 1; }
+  .ht {
+    position: absolute;
+    width: 14px; height: 13px;
+    animation: heartUp 1.1s ease-out infinite;
+  }
+  @keyframes heartUp {
+    0% { transform: translateY(0) scale(0.6); opacity: 0; }
+    30% { opacity: 1; }
+    100% { transform: translateY(-34px) scale(1.15); opacity: 0; }
+  }
+  /* thinking dots (overlay for running) */
+  #thinkDots { position: absolute; top: 6px; right: 8px; opacity: 0; transition: opacity .2s ease; pointer-events: none; }
+  body.running #thinkDots { opacity: 1; animation: dots 1.2s ease-in-out infinite; }
+  @keyframes dots {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  #thinkDots span {
+    display: inline-block; width: 5px; height: 5px; margin-left: 3px;
+    border-radius: 50%; background: #3f6fe0; opacity: .8;
+  }
+  /* sound toggle hint */
+  #muteHint {
+    position: absolute;
+    right: 6px;
+    top: 44px;
+    background: rgba(31, 42, 68, 0.82);
+    color: #fff;
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity .25s ease;
+    pointer-events: none;
+    z-index: 12;
+  }
+  #muteHint.show { opacity: 1; }
+  /* tts diagnostics (hidden unless triggered) */
+  #ttsDiag {
+    position: absolute;
+    left: 4px;
+    top: 40px;
+    background: rgba(20, 24, 40, 0.92);
+    color: #9fe8a0;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 10px;
+    line-height: 1.5;
+    max-width: 170px;
+    white-space: pre-wrap;
+    font-family: Consolas, monospace;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+    z-index: 13;
+  }
+  #ttsDiag.show { opacity: 1; }
+  /* pet self-update hint (never visible) */
+  #ver { display: none; }
+</style>
+</head>
+<body class="idle">
+  <div id="ver">whale-v19</div>
+  <div id="stage">
+    <div id="bubble">任务完成啦！✨</div>
+    <div id="muteHint"></div>
+    <div id="ttsDiag"></div>
+    <div id="petWrap" class="bob">
+      <img id="petAnim" alt="whale girl">
+      <div id="petHit"></div>
+      <div id="confetti">
+        <span class="cf" style="left:12%;top:30%;background:#ff8fa3"></span>
+        <span class="cf" style="left:78%;top:24%;background:#ffd166;animation-delay:.15s"></span>
+        <span class="cf" style="left:6%;top:52%;background:#7fb0ff;animation-delay:.3s"></span>
+        <span class="cf" style="left:88%;top:44%;background:#9ae6b4;animation-delay:.45s"></span>
+        <span class="cf" style="left:45%;top:12%;background:#ffd166;animation-delay:.55s"></span>
+      </div>
+      <div id="hearts">
+        <span class="ht" style="left:10%;top:26%;background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 14 13%22><path d=%22M7 13 C 2 9, -1 4, 3 1 C 5 0, 7 2, 7 3 C 7 2, 9 0, 11 1 C 15 4, 12 9, 7 13 Z%22 fill=%22%23ff8fa3%22/></svg>') no-repeat center/contain"></span>
+        <span class="ht" style="left:74%;top:20%;background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 14 13%22><path d=%22M7 13 C 2 9, -1 4, 3 1 C 5 0, 7 2, 7 3 C 7 2, 9 0, 11 1 C 15 4, 12 9, 7 13 Z%22 fill=%22%23ff8fa3%22/></svg>') no-repeat center/contain;animation-delay:.4s"></span>
+      </div>
+      <div id="thinkDots"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+
+  <div id="menuBackdrop"></div>
+  <div id="ctxMenu">
+    <div class="cm-title">🐋 鲸鱼娘 · 功能菜单</div>
+    <div class="cm-item" data-act="mute"><span class="cm-ico">🔊</span><span class="cm-label">声音开关</span></div>
+    <div class="cm-item cm-vol-row"><span class="cm-ico">🎚️</span><span class="cm-label">总音量 <b id="cmVolVal">80%</b></span><input type="range" id="cmVolSlider" min="0" max="100" value="80"></div>
+    <div class="cm-item cm-vol-row"><span class="cm-ico">🗣️</span><span class="cm-label">语音 <b id="cmAVoice">100%</b></span><input type="range" id="cmAVoiceSlider" min="0" max="100" value="100"></div>
+    <div class="cm-item cm-vol-row"><span class="cm-ico">🎵</span><span class="cm-label">音效 <b id="cmASfx">100%</b></span><input type="range" id="cmASfxSlider" min="0" max="100" value="100"></div>
+    <div class="cm-item cm-vol-row"><span class="cm-ico">🎉</span><span class="cm-label">庆祝 <b id="cmACelebrate">100%</b></span><input type="range" id="cmACelebrateSlider" min="0" max="100" value="100"></div>
+    <div class="cm-item" data-act="test"><span class="cm-ico">🎤</span><span class="cm-label">测试语音</span></div>
+    <div class="cm-item" data-act="diag"><span class="cm-ico">🩺</span><span class="cm-label">诊断信息</span></div>
+    <div class="cm-item" data-act="version"><span class="cm-ico">ℹ️</span><span class="cm-label">版本信息</span></div>
+    <div class="cm-item" data-act="refresh"><span class="cm-ico">🔄</span><span class="cm-label">刷新桌宠</span></div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  var body = document.body;
+  var bubble = document.getElementById("bubble");
+  var muteHint = document.getElementById("muteHint");
+  var petWrap = document.getElementById("petWrap");
+  var petAnim = document.getElementById("petAnim");
+  var petHit = document.getElementById("petHit");
+
+  /* ---- web mode (embedded in an iframe by the web UI) ---- */
+  var IS_WEB = (function () {
+    try { return window.self !== window.top; } catch (e) { return false; }
+  })();
+  if (IS_WEB) {
+    // In the web UI we're inside an iframe: no Electron window drag. The whole
+    // pet is JS-draggable; drag events are bridged to the parent page via
+    // postMessage so the parent can move the floating container.
+    var webDrag = { on: false, sx: 0, sy: 0, ox: 0, oy: 0, moved: false };
+    petWrap.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      webDrag.on = true; webDrag.moved = false;
+      webDrag.sx = e.clientX; webDrag.sy = e.clientY;
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", function (e) {
+      if (!webDrag.on) return;
+      var dx = e.clientX - webDrag.sx, dy = e.clientY - webDrag.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) webDrag.moved = true;
+      try {
+        window.parent.postMessage({ type: "dswp-drag", dx: dx, dy: dy, phase: "move" }, "*");
+      } catch (err) {}
+    });
+    window.addEventListener("mouseup", function () {
+      if (!webDrag.on) return;
+      webDrag.on = false;
+      try {
+        window.parent.postMessage({ type: "dswp-drag", phase: "end" }, "*");
+      } catch (err) {}
+    });
+    // suppress click-poke if this press turned into a drag
+    var origPokeClick = null;
+    var webDragHit = false;
+    document.addEventListener("click", function (e) {
+      if (webDrag.moved) {
+        e.stopPropagation();
+        e.preventDefault();
+        webDrag.moved = false;
+      }
+    }, true);
+  }
+
+  /* ---------------- animations (base64 webp, injected at build time) ---------------- */
+  var ANIM = {
+    idle: "data:image/webp;base64,__ANIM_IDLE__",
+    running: "data:image/webp;base64,__ANIM_RUNNING__",
+    failed: "data:image/webp;base64,__ANIM_FAILED__",
+    waiting: "data:image/webp;base64,__ANIM_WAITING__",
+    waving: "data:image/webp;base64,__ANIM_WAVING__",
+    jumping: "data:image/webp;base64,__ANIM_JUMPING__"
+  };
+  // resting static frame for idle state (pet is still most of the time)
+  var ANIM_IDLE_STATIC = "data:image/webp;base64,__ANIM_IDLESTATIC__";
+  Object.keys(ANIM).forEach(function (k) {
+    var img = new Image();
+    img.src = ANIM[k];
+  });
+  new Image().src = ANIM_IDLE_STATIC;
+
+  var lastDoneAt = null;
+  var lastSadAt = null;
+  var celebrateTimer = null;
+  var coquetryTimer = null;
+  var hasLoadedOnce = false;
+  var muted = false;
+
+  /* ---------------- sound (soft, layered) ---------------- */
+  var audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+    if (audioCtx && audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} }
+    return audioCtx;
+  }
+  /** soft bell tone: triangle + gentle decay */
+  function bell(freq, dur, vol, when, slideTo, action) {
+    if (muted) return;
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var t0 = ctx.currentTime + (when || 0);
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime((vol || 0.14) * volFor(action || "sfx"), t0 + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  }
+  /** add a soft high shimmer (octave) to the last bell */
+  function shimmer(freq, dur, vol, when, action) {
+    if (muted) return;
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var t0 = ctx.currentTime + (when || 0);
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq * 2, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime((vol || 0.05) * volFor(action || "sfx"), t0 + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.8);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur);
+  }
+  /** gentle completion arpeggio: C5 E5 G5 C6 with shimmer */
+  function playCelebrate() {
+    bell(523.25, 0.5, 0.16, 0, null, "celebrate");
+    bell(659.25, 0.5, 0.16, 0.16, null, "celebrate");
+    bell(783.99, 0.5, 0.16, 0.32, null, "celebrate");
+    bell(1046.5, 0.9, 0.18, 0.5, null, "celebrate");
+    shimmer(1046.5, 0.8, 0.05, 0.5, "celebrate");
+  }
+  /** soft coquetry "meow-ish" chirp */
+  function playCoquetry() {
+    bell(660, 0.25, 0.13, 0, 880, "sfx");
+    shimmer(880, 0.2, 0.04, 0.1, "sfx");
+    bell(990, 0.3, 0.1, 0.3, 1180, "sfx");
+  }
+  /** tiny poke blip */
+  function playPoke() {
+    bell(520, 0.1, 0.09, 0, 700, "sfx");
+  }
+  /** sad falling tone */
+  function playSad() {
+    bell(392, 0.5, 0.12, 0, 330, "sad");
+    shimmer(330, 0.4, 0.03, 0.2, "sad");
+  }
+  function beep() {
+    bell(880, 0.12, 0.1, 0, null, "sfx");
+  }
+
+  /* ---------------- speech: pre-synthesized neural voice ----------------
+     All pet lines are pre-synthesized with Edge neural TTS (Xiaoxiao) at build
+     time and embedded here as base64 mp3. speak() plays the matching clip
+     directly — no runtime network, no system TTS (which is silent in the
+     Electron sandbox). Falls back to Edge online / speechSynthesis for text
+     that has no clip.
+  ---------------- */
+  var AUDIO = __AUDIO_JSON__; // { key: { b64, text, bytes } }
+  try { window.__PET_AUDIO__ = AUDIO; } catch (e) {}
+  var ttsEnabled = true;
+  var ttsVoice = null;
+  var VOICE_PREF = [/xiaoxiao/i, /yuyang/i, /yaoyao/i, /kangkang/i, /huihui/i, /zh[-_]CN/i, /Chinese/i];
+  function pickVoice() {
+    if (typeof speechSynthesis === "undefined") return null;
+    var voices = speechSynthesis.getVoices();
+    if (!voices || !voices.length) return null;
+    for (var p = 0; p < VOICE_PREF.length; p++) {
+      for (var i = 0; i < voices.length; i++) {
+        if (VOICE_PREF[p].test(voices[i].lang + " " + voices[i].name)) return voices[i];
+      }
+    }
+    return voices[0] || null;
+  }
+  if (typeof speechSynthesis !== "undefined") {
+    speechSynthesis.onvoiceschanged = function () { ttsVoice = pickVoice(); };
+  }
+  var EDGE_VOICE = "zh-CN-XiaoxiaoNeural";
+  var EDGE_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
+  var EDGE_WS = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
+  var ttsDiag = document.getElementById("ttsDiag");
+  var diagLog = [];
+  function diag(line) {
+    diagLog.push(new Date().toISOString().slice(11, 19) + " " + line);
+    if (diagLog.length > 12) diagLog.shift();
+  }
+  function showDiag() {
+    var sys = typeof speechSynthesis !== "undefined";
+    var voices = sys ? speechSynthesis.getVoices() : [];
+    var zh = voices.filter(function (v) { return /zh|Chinese/i.test(v.lang + " " + v.name); });
+    var clips = AUDIO ? Object.keys(AUDIO).length : 0;
+    var lines = [
+      "ver " + CURRENT_VERSION,
+      "speechSynthesis=" + sys,
+      "voices=" + voices.length + " zh=" + zh.length,
+      "audio clips=" + clips,
+      "--- tts diag ---"
+    ].concat(diagLog);
+    ttsDiag.textContent = lines.join("\n");
+    ttsDiag.classList.add("show");
+    setTimeout(function () { ttsDiag.classList.remove("show"); }, 6000);
+  }
+  /* AudioContext-based clip player: unlock on first user gesture, then any
+     later play() works (including autoplay-driven completion announcements). */
+  var audioCtxForClip = null;
+  var clipBufferCache = {};
+  /* master volume 0..1, persisted across reloads */
+  var petVolume = 0.8;
+  try { var _v = parseFloat(localStorage.getItem("dshPetVolume")); if (!isNaN(_v) && _v >= 0 && _v <= 1) petVolume = _v; } catch (e) {}
+  /* per-action volume multipliers (relative to master) */
+  var actionVol = { sfx: 1.0, voice: 1.0, celebrate: 1.0, sad: 1.0 };
+  try {
+    var _a = JSON.parse(localStorage.getItem("dshPetActionVol") || "null");
+    if (_a && typeof _a === "object") for (var k in actionVol) if (typeof _a[k] === "number") actionVol[k] = _a[k];
+  } catch (e) {}
+  function saveActionVol() {
+    try { localStorage.setItem("dshPetActionVol", JSON.stringify(actionVol)); } catch (e) {}
+  }
+  function setVolume(v) {
+    petVolume = Math.max(0, Math.min(1, v));
+    try { localStorage.setItem("dshPetVolume", String(petVolume)); } catch (e) {}
+  }
+  /** effective volume for a given action type */
+  function volFor(action) { return petVolume * (actionVol[action] || 1); }
+  function unlockAudio() {
+    if (!audioCtxForClip) {
+      try { audioCtxForClip = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtxForClip = null; }
+    }
+    if (audioCtxForClip && audioCtxForClip.state === "suspended") {
+      audioCtxForClip.resume().catch(function () {});
+    }
+  }
+  // unlock as soon as the user interacts anywhere (any click gesture)
+  window.addEventListener("pointerdown", unlockAudio, { once: true, capture: true });
+
+  function playClip(key, action) {
+    var entry = AUDIO && AUDIO[key];
+    if (!entry || !entry.b64) return false;
+    try {
+      unlockAudio();
+      if (!audioCtxForClip) return false;
+      var bin = atob(entry.b64);
+      var u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      var ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+      var p = audioCtxForClip.decodeAudioData(ab).then(function (buf) {
+        var src = audioCtxForClip.createBufferSource();
+        src.buffer = buf;
+        var gain = audioCtxForClip.createGain();
+        gain.gain.value = volFor(action || "voice");
+        src.connect(gain).connect(audioCtxForClip.destination);
+        src.start(0);
+      }).catch(function () {});
+      return true;
+    } catch (e) { return false; }
+  }
+  var audioQueue = [];
+
+  function speakText(text) {
+    // find a matching pre-synthesized clip by exact text
+    if (AUDIO) {
+      for (var k in AUDIO) {
+        if (AUDIO[k].text === text) {
+          playClip(k);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function speak(text) {
+    if (muted || !ttsEnabled) return;
+    // strip emoji / symbols so the text matches the pre-synthesized clip text
+    var clean = String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{200D}\u{20E3}]/gu, "").trim();
+    if (speakText(clean)) return;
+    // fallback: edge online, then system tts
+    edgeSpeak(clean).then(function (ok) {
+      if (ok) return;
+      if (typeof speechSynthesis === "undefined") return;
+      try {
+        if (!ttsVoice) ttsVoice = pickVoice();
+        var u = new SpeechSynthesisUtterance(clean);
+        u.lang = "zh-CN";
+        u.rate = 1.0;
+        u.pitch = 1.1;
+        u.volume = 0.9;
+        if (ttsVoice) u.voice = ttsVoice;
+        speechSynthesis.speak(u);
+      } catch (e) {}
+    });
+  }
+
+  function edgeSpeak(text) {
+    return new Promise(function (resolve) {
+      diag("edge: try speak");
+      var connId = "dsh-pet-" + Math.random().toString(36).slice(2, 12);
+      var ws;
+      try {
+        ws = new WebSocket(EDGE_WS + "?TrustedClientToken=" + EDGE_TOKEN + "&ConnectionId=" + connId);
+      } catch (e) {
+        edgeAvailable = false;
+        diag("edge: WS construct fail " + e.message);
+        resolve(false);
+        return;
+      }
+      var chunks = [];
+      var bytes = 0;
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) {
+          done = true;
+          diag("edge: timeout, bytes=" + bytes);
+          try { ws.close(); } catch (e) {}
+          resolve(bytes > 0);
+        }
+      }, 8000);
+
+      ws.onopen = function () {
+        diag("edge: open");
+        ws.send(JSON.stringify({
+          context: { synthesis: { audio: { metadataoptions: { sentenceBoundaryEnabled: "false", wordBoundaryEnabled: "true" }, outputFormat: "audio-24khz-48kbitrate-mono-mp3" } } }
+        }));
+        var ssml =
+          "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='zh-CN'>" +
+          "<voice name='" + EDGE_VOICE + "'><prosody rate='+8%' pitch='+8Hz'>" +
+          escapeXml(text) +
+          "</prosody></voice></speak>";
+        ws.send(ssml);
+      };
+      ws.onmessage = function (ev) {
+        if (typeof ev.data === "string") {
+          if (ev.data.indexOf("path:turn.end") >= 0) {
+            if (!done) { done = true; clearTimeout(timer); diag("edge: turn.end bytes=" + bytes); setTimeout(function () { try { ws.close(); } catch (e) {} resolve(bytes > 0); }, 400); }
+          }
+        } else {
+          chunks.push(ev.data);
+          bytes += ev.data.byteLength || ev.data.size || 0;
+        }
+      };
+      ws.onerror = function (ev) {
+        edgeAvailable = false;
+        diag("edge: WS error " + (ev && ev.message ? ev.message : "?"));
+        if (!done) { done = true; clearTimeout(timer); resolve(false); }
+      };
+      ws.onclose = function (ev) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        diag("edge: close code=" + (ev && ev.code) + " bytes=" + bytes);
+        if (bytes > 0) {
+          try {
+            var blob = new Blob(chunks, { type: "audio/mpeg" });
+            var au = new Audio(URL.createObjectURL(blob));
+            au.play().then(function () { diag("edge: PLAYING"); resolve(true); }).catch(function (e) { diag("edge: play fail " + e.message); resolve(true); });
+          } catch (e) { diag("edge: blob fail"); resolve(true); }
+        } else {
+          resolve(false);
+        }
+      };
+
+      function escapeXml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+      }
+    });
+  }
+
+  /* ---------------- lines ---------------- */
+  var LINES = {
+    coquetry: [
+      "主人～摸摸我的头嘛～",
+      "人家好无聊呀～陪我玩嘛～",
+      "哼！不理你了……才怪～",
+      "主人主人～抱抱～",
+      "人家今天也很努力哦！",
+      "咦？你一直在偷看我吗～",
+      "好想吃小鱼干…啊不是，是投喂～",
+      "嘿嘿，主人最好了～",
+      "人家想听主人夸夸嘛～",
+      "主人快看！人家超乖的～",
+      "嗯哼～人家在呢！",
+      "主人摸摸头，烦恼全飞走～",
+      "人家的小尾巴摇呀摇～",
+      "今天也要和主人贴贴～",
+      "人家才没有偷懒，是在酝酿啦～"
+    ],
+    running: [
+      "正在努力思考中…",
+      "这个有点难，人家在想办法～",
+      "马上就好啦！",
+      "工具在手，天下我有～",
+      "人家正在努力干活呢～",
+      "别急别急，马上就有结果啦！",
+      "代码在人家手里服服帖帖～",
+      "再给人家一点点时间嘛～",
+      "主人稍等，人家马上就好～",
+      "加油加油，人家可以的！"
+    ],
+    celebrate: [
+      "任务完成啦！主人真棒！✨",
+      "搞定！夸夸人家嘛～",
+      "耶！工作做完啦！",
+      "全部搞定！人家厉害吧～",
+      "完美收工！撒花～",
+      "大成功！人家超开心的～",
+      "完成了完成了！快夸我～",
+      "一切顺利！主人快看结果～",
+      "收工收工！人家表现不错吧～",
+      "搞定收工！今晚加小鱼干嘛～"
+    ],
+    sad: [
+      "呜…刚才那步好像出错了…",
+      "人家有点难过…让主人担心了…",
+      "别急别急，人家再想想办法～",
+      "呜哇…这里出了点问题…",
+      "人家会努力的，再给次机会嘛～",
+      "有点小挫折，但人家不放弃！",
+      "主人别生气，人家马上修好～",
+      "呜呜…人家已经很认真了…"
+    ],
+    todo: [
+      "进度 {done}/{total} 啦！继续加油～",
+      "还有 {left} 件事要做，主人再等等哦～",
+      "人家记着呢，还有 {left} 件事～",
+      "进度过半啦，胜利在望～"
+    ]
+  };
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function showBubble(text, ms) {
+    bubble.textContent = text;
+    bubble.classList.add("show");
+    if (celebrateTimer) clearTimeout(celebrateTimer);
+    celebrateTimer = setTimeout(function () {
+      bubble.classList.remove("show");
+    }, ms || 3200);
+  }
+
+  /* ---------------- state machine ---------------- */
+  var idleMotionTimer = null;
+  var currentMode = "idle";
+
+  function setMode(mode) {
+    currentMode = mode;
+    body.classList.remove("idle", "running", "happy", "coquetry", "sad");
+    body.classList.add(mode);
+    if (idleMotionTimer) { clearTimeout(idleMotionTimer); idleMotionTimer = null; }
+    if (mode === "idle") {
+      // rest still by default; occasionally play a short burst of motion
+      petAnim.src = ANIM_IDLE_STATIC;
+      scheduleIdleMotion();
+    } else {
+      var animKey = {
+        running: "running",
+        happy: "jumping",
+        coquetry: "waving",
+        sad: "failed"
+      }[mode] || "idle";
+      petAnim.src = ANIM[animKey];
+      petWrap.classList.remove("jump");
+      if (mode === "happy") {
+        petWrap.classList.add("jump");
+        setTimeout(function () { petWrap.classList.remove("jump"); }, 750);
+      }
+    }
+  }
+
+  /** idle variants: occasionally play a random non-idle animation for variety */
+  var IDLE_VARIANTS = [
+    { key: "idle", dur: 2200 },
+    { key: "waving", dur: 2600, weight: 2 },
+    { key: "waiting", dur: 2400, weight: 2 },
+    { key: "jumping", dur: 1800, weight: 1 }
+  ];
+  function pickIdleVariant() {
+    // weighted random pick
+    var total = 0;
+    IDLE_VARIANTS.forEach(function (v) { total += (v.weight || 1); });
+    var r = Math.random() * total;
+    for (var i = 0; i < IDLE_VARIANTS.length; i++) {
+      r -= (IDLE_VARIANTS[i].weight || 1);
+      if (r <= 0) return IDLE_VARIANTS[i];
+    }
+    return IDLE_VARIANTS[0];
+  }
+
+  /** play a random idle variant for a short burst, then back to static */
+  function scheduleIdleMotion() {
+    if (idleMotionTimer) clearTimeout(idleMotionTimer);
+    var delay = 5000 + Math.random() * 8000; // 5~13s
+    idleMotionTimer = setTimeout(function () {
+      if (currentMode !== "idle") return;
+      var variant = pickIdleVariant();
+      petAnim.src = ANIM[variant.key];
+      idleMotionTimer = setTimeout(function () {
+        if (currentMode === "idle") petAnim.src = ANIM_IDLE_STATIC;
+      }, variant.dur);
+      scheduleIdleMotion();
+    }, delay);
+  }
+  function celebrate(doneCount) {
+    setMode("happy");
+    var line = pick(LINES.celebrate) + (doneCount ? "（已完成 " + doneCount + " 次啦）" : "");
+    showBubble(line, 4200);
+    playCelebrate();
+    speak(line.replace(/（.*）/, ""));
+    if (coquetryTimer) { clearTimeout(coquetryTimer); coquetryTimer = null; }
+    if (celebrateTimer) clearTimeout(celebrateTimer);
+    celebrateTimer = setTimeout(function () { setMode("idle"); }, 4200);
+  }
+  /** poke reaction: mostly coquetry, sometimes happy jump, occasionally sad */
+  function poke() {
+    var r = Math.random();
+    if (r < 0.15) {
+      // occasionally a little sad/whiny
+      sad("poke");
+      return;
+    }
+    if (r < 0.35) {
+      // happy jump reaction
+      setMode("happy");
+      playPoke();
+      var line = pick(LINES.celebrate);
+      showBubble(line, 2600);
+      if (coquetryTimer) { clearTimeout(coquetryTimer); coquetryTimer = null; }
+      if (celebrateTimer) clearTimeout(celebrateTimer);
+      celebrateTimer = setTimeout(function () { setMode("idle"); }, 2600);
+      return;
+    }
+    coquetry();
+  }
+
+  function coquetry() {
+    setMode("coquetry");
+    playCoquetry();
+    var line = pick(LINES.coquetry);
+    showBubble(line, 3000);
+    speak(line);
+    if (coquetryTimer) clearTimeout(coquetryTimer);
+    coquetryTimer = setTimeout(function () { setMode("idle"); }, 3000);
+  }
+  function sad(fromPoke) {
+    setMode("sad");
+    playSad();
+    var line = pick(LINES.sad);
+    showBubble(line, 3000);
+    if (!fromPoke) speak(line);
+    if (celebrateTimer) clearTimeout(celebrateTimer);
+    celebrateTimer = setTimeout(function () { setMode("idle"); }, 3000);
+  }
+
+  /* ---------------- poke / click (hot zone only; window drag elsewhere) ---- */
+  var clickTimer = null;
+  var pendingClick = false;
+  var clickCount = 0;
+  var lastClickAt = 0;
+  var ctxMenu = document.getElementById("ctxMenu");
+
+  /* custom right-click menu on the hat zone (no-drag area).
+     preventDefault stops the main-process context-menu handler (which would
+     otherwise force a page reload), letting us show our own menu. */
+  petHit.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openCtxMenu(e.clientX, e.clientY);
+  });
+  function openCtxMenu(x, y) {
+    var label = ctxMenu.querySelector('[data-act="mute"] .cm-label');
+    label.textContent = muted ? "🔇 声音：关（点击开）" : "🔊 声音：开（点击关）";
+    // sync volume slider
+    var slider = document.getElementById("cmVolSlider");
+    var val = document.getElementById("cmVolVal");
+    if (slider) { slider.value = Math.round(petVolume * 100); }
+    if (val) { val.textContent = Math.round(petVolume * 100) + "%"; }
+    syncActionSliders();
+    // position within window bounds — prefer above the cursor so the menu
+    // never covers the whole tiny window (220x212)
+    var w = ctxMenu.offsetWidth || 170;
+    var h = ctxMenu.offsetHeight || 200;
+    var px = Math.min(x, window.innerWidth - w - 4);
+    var py = y - h - 8; // above cursor
+    if (py < 2) py = Math.min(y + 8, window.innerHeight - h - 4); // fall back below
+    ctxMenu.style.left = Math.max(2, px) + "px";
+    ctxMenu.style.top = Math.max(2, py) + "px";
+    ctxMenu.classList.add("show");
+    menuBackdrop.classList.add("show"); // clicks anywhere outside the menu hit this layer
+  }
+  function closeCtxMenu() {
+    ctxMenu.classList.remove("show");
+    menuBackdrop.classList.remove("show");
+  }
+  /* clicking the backdrop closes the menu (backdrop is no-drag, so Electron
+     dispatches the click even though the window region is drag) */
+  var menuBackdrop = document.getElementById("menuBackdrop");
+  menuBackdrop.addEventListener("click", function (e) {
+    e.stopPropagation();
+    closeCtxMenu();
+  });
+  /* clicking anywhere OUTSIDE the window (desktop, other apps) blurs the pet
+     window — close the menu then, matching standard context-menu behavior */
+  window.addEventListener("blur", function () {
+    if (ctxMenu.classList.contains("show")) closeCtxMenu();
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden && ctxMenu.classList.contains("show")) closeCtxMenu();
+  });
+  /* volume sliders */
+  var cmVolSlider = document.getElementById("cmVolSlider");
+  var cmVolVal = document.getElementById("cmVolVal");
+  if (cmVolSlider) {
+    cmVolSlider.addEventListener("input", function () {
+      var v = parseInt(cmVolSlider.value, 10) / 100;
+      setVolume(v);
+      if (cmVolVal) cmVolVal.textContent = Math.round(v * 100) + "%";
+    });
+  }
+  /* per-action volume sliders */
+  var ACTION_SLIDERS = [
+    { id: "cmAVoiceSlider", valId: "cmAVoice", key: "voice" },
+    { id: "cmASfxSlider", valId: "cmASfx", key: "sfx" },
+    { id: "cmACelebrateSlider", valId: "cmACelebrate", key: "celebrate" }
+  ];
+  ACTION_SLIDERS.forEach(function (cfg) {
+    var el = document.getElementById(cfg.id);
+    if (!el) return;
+    el.addEventListener("input", function () {
+      var v = parseInt(el.value, 10) / 100;
+      actionVol[cfg.key] = v;
+      saveActionVol();
+      var val = document.getElementById(cfg.valId);
+      if (val) val.textContent = Math.round(v * 100) + "%";
+    });
+  });
+  function syncActionSliders() {
+    ACTION_SLIDERS.forEach(function (cfg) {
+      var el = document.getElementById(cfg.id);
+      var val = document.getElementById(cfg.valId);
+      if (el) el.value = Math.round(actionVol[cfg.key] * 100);
+      if (val) val.textContent = Math.round(actionVol[cfg.key] * 100) + "%";
+    });
+  }
+  ctxMenu.addEventListener("click", function (e) {
+    var item = e.target.closest(".cm-item");
+    if (!item) return;
+    var act = item.getAttribute("data-act");
+    if (!act) return; // volume rows: keep menu open while dragging slider
+    closeCtxMenu();
+    if (act === "mute") {
+      muted = !muted;
+      muteHint.textContent = muted ? "声音已关闭 🔇" : "声音已开启 🔊";
+      muteHint.classList.add("show");
+      setTimeout(function () { muteHint.classList.remove("show"); }, 1400);
+      if (!muted) beep();
+    } else if (act === "test") {
+      playPoke();
+      speak(pick(LINES.coquetry));
+    } else if (act === "diag") {
+      showDiag();
+    } else if (act === "version") {
+      showBubble("🐋 鲸鱼娘 " + CURRENT_VERSION, 2600);
+    } else if (act === "refresh") {
+      location.replace("/pet.html?" + Date.now());
+    }
+  });
+  document.addEventListener("click", function (e) {
+    if (!ctxMenu.contains(e.target)) closeCtxMenu();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeCtxMenu();
+  });
+  /* ensure the pet window takes focus on interaction so window blur fires
+     when the user clicks outside (desktop / other windows) */
+  function ensureFocus() { try { window.focus(); } catch (e) {} }
+  petHit.addEventListener("mousedown", ensureFocus);
+  window.addEventListener("mousedown", ensureFocus);
+  petHit.addEventListener("click", function () {
+    var now = Date.now();
+    if (now - lastClickAt < 450) {
+      clickCount++;
+    } else {
+      clickCount = 1;
+    }
+    lastClickAt = now;
+    if (clickCount >= 3) {
+      clickCount = 0;
+      showDiag();
+      return;
+    }
+    pendingClick = true;
+    if (clickTimer) clearTimeout(clickTimer);
+    clickTimer = setTimeout(function () {
+      if (!pendingClick) return;
+      pendingClick = false;
+      playPoke();
+      poke();
+    }, 280);
+  });
+  /* long-press on the hat: happy jump reaction + line */
+  var longPressTimer = null;
+  var longPressFired = false;
+  petHit.addEventListener("mousedown", function (e) {
+    if (e.button !== 0) return;
+    longPressFired = false;
+    longPressTimer = setTimeout(function () {
+      longPressFired = true;
+      pendingClick = false;
+      if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+      playCelebrate();
+      setMode("happy");
+      showBubble("嘿嘿，被主人摸头啦～好开心！", 2600);
+      speak("嘿嘿，被主人摸头啦！好开心！");
+      if (coquetryTimer) { clearTimeout(coquetryTimer); coquetryTimer = null; }
+      if (celebrateTimer) clearTimeout(celebrateTimer);
+      celebrateTimer = setTimeout(function () { setMode("idle"); }, 2600);
+    }, 700);
+  });
+  petHit.addEventListener("mouseup", function () {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  });
+  petHit.addEventListener("dblclick", function (e) {
+    e.stopPropagation();
+    pendingClick = false;
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    muted = !muted;
+    muteHint.textContent = muted ? "声音已关闭 🔇（双击恢复）" : "声音已开启 🔊（双击静音）";
+    muteHint.classList.add("show");
+    setTimeout(function () { muteHint.classList.remove("show"); }, 1600);
+    if (!muted) beep();
+  });
+
+  /* ---------------- status polling ---------------- */
+  async function poll() {
+    var status;
+    try {
+      var rs = await fetch("/api/status", { cache: "no-store" });
+      status = await rs.json();
+    } catch (e) { return; }
+    if (!status || status.ok !== true) return;
+
+    if (!hasLoadedOnce) {
+      hasLoadedOnce = true;
+      lastDoneAt = status.doneAt;
+      lastSadAt = status.lastToolError ? status.lastToolError.at : null;
+      setMode(status.status === "running" ? "running" : "idle");
+      return;
+    }
+
+    if (status.waitingApproval && !body.classList.contains("running") && !body.classList.contains("happy")) {
+      setMode("running");
+      showBubble("需要主人批准：" + (status.waitingApproval.toolName || "工具") + " 🖐️");
+    }
+
+    if (status.status === "running") {
+      if (!body.classList.contains("running") && !body.classList.contains("coquetry") && !body.classList.contains("sad")) {
+        setMode("running");
+        if (status.lastTool && Math.random() < 0.4) {
+          showBubble("正在用「" + status.lastTool.name + "」忙活中…", 2600);
+        } else if (status.todos && Math.random() < 0.3) {
+          var t = status.todos;
+          showBubble(pick(LINES.todo).replace("{done}", t.done).replace("{total}", t.total).replace("{left}", Math.max(0, t.total - t.done)), 2600);
+        }
+      }
+      return;
+    }
+
+    if (status.lastToolError && !lastSadAt && status.lastToolError.at >= (status.doneAt || 0) - 60000) {
+      lastSadAt = status.lastToolError.at;
+      sad();
+      return;
+    }
+    if (lastDoneAt !== status.doneAt && status.doneAt !== null) {
+      lastDoneAt = status.doneAt;
+      celebrate(status.doneCount);
+      return;
+    }
+    if (body.classList.contains("running")) {
+      setMode("idle");
+    }
+  }
+
+  /* ---------------- self-update (cache-busting reload) ---------------- */
+  var CURRENT_VERSION = "whale-v19";
+  setInterval(function () {
+    fetch("/pet.html?" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (t) {
+      var m = t.match(/id="ver">([^<]+)</);
+      if (m && m[1] && m[1] !== CURRENT_VERSION) {
+        // force a fresh load, bypassing any HTTP/disk cache
+        location.replace("/pet.html?" + Date.now());
+      }
+    }).catch(function () {});
+  }, 10000);
+
+  poll();
+  setInterval(poll, 1500);
+})();
+</script>
+</body>
+</html>

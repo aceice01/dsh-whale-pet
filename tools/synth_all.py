@@ -1,15 +1,33 @@
-# synth_all.py — synthesize every pet line with Edge neural TTS.
-# Voice + prosody are configurable via env: PET_VOICE, PET_RATE, PET_PITCH.
-# Output base64 into audio.json.
-import asyncio, json, base64, os
+#!/usr/bin/env python3
+"""Synthesize all pet voice lines with Microsoft Edge neural TTS (Xiaoyi).
+
+Outputs `lib/audio.json` (base64 mp3 clips) that `build-pet.mjs` injects into
+the pet page. The voice / prosody are configurable via environment variables.
+
+Usage:
+    pip install edge-tts
+    python tools/synth_all.py                      # defaults: XiaoyiNeural
+    PET_VOICE=zh-CN-XiaoxiaoNeural python tools/synth_all.py   # pick a voice
+    PET_RATE="+0%" PET_PITCH="+0Hz" python tools/synth_all.py  # adjust prosody
+"""
+import asyncio
+import base64
+import json
+import os
+
 import edge_tts
 
 VOICE = os.environ.get("PET_VOICE", "zh-CN-XiaoyiNeural")
-RATE = os.environ.get("PET_RATE", "+8%")
-PITCH = os.environ.get("PET_PITCH", "+12Hz")
-OUT = "D:/Desktop/new/dsh-whale-pet/lib/audio.json"
-TMP = "D:/Desktop/new/dsh-whale-pet/.tmp-audio.mp3"
+RATE = os.environ.get("PET_RATE", "+10%")
+PITCH = os.environ.get("PET_PITCH", "+14Hz")
 
+# Paths are relative to the repository root (this file lives in tools/).
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "lib", "audio.json")
+TMP = os.path.join(ROOT, ".tmp-audio.mp3")
+
+# Every pet line. Keys are stable ids; `text` must match the line used in
+# pet.html so that speak() can look up the right clip.
 LINES = {
     # coquetry (15)
     "coquetry0": "主人～摸摸我的头嘛～",
@@ -68,8 +86,11 @@ LINES = {
     "welcome0": "主人好～人家是鲸鱼娘！",
 }
 
+
 async def main():
-    # resume: load existing clips so re-runs only synthesize missing lines
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+
+    # Resume: keep clips already present so interrupted runs don't redo work.
     results = {}
     if os.path.exists(OUT):
         with open(OUT, "r", encoding="utf-8") as f:
@@ -78,8 +99,10 @@ async def main():
             if isinstance(v, dict) and v.get("b64"):
                 results[k] = v
         print(f"resuming: {len(results)} already done")
+
     todo = [(k, t) for k, t in LINES.items() if k not in results]
-    print(f"to synthesize: {len(todo)}")
+    print(f"to synthesize: {len(todo)}  (voice={VOICE} rate={RATE} pitch={PITCH})")
+
     for key, text in todo:
         for attempt in range(4):
             try:
@@ -89,18 +112,21 @@ async def main():
                     b64 = base64.b64encode(f.read()).decode("ascii")
                 results[key] = {"b64": b64, "text": text, "bytes": len(b64) * 3 // 4}
                 print(f"OK {key} ({results[key]['bytes']}B)")
-                # save incrementally so a timeout keeps progress
+                # Save incrementally so a timeout keeps progress.
                 with open(OUT, "w", encoding="utf-8") as f:
                     json.dump(results, f, ensure_ascii=False)
                 break
-            except Exception as e:
-                print(f"retry {key} ({attempt+1}): {e}")
+            except Exception as e:  # noqa: BLE001 - retry transient failures
+                print(f"retry {key} ({attempt + 1}): {e}")
                 await asyncio.sleep(1)
         else:
             print(f"FAIL {key}: {text}")
+
     if os.path.exists(TMP):
         os.remove(TMP)
     total = sum(v["bytes"] for v in results.values())
-    print(f"DONE: {len(results)} lines, {total/1024:.0f}KB, voice={VOICE} rate={RATE} pitch={PITCH}")
+    print(f"DONE: {len(results)} lines, {total / 1024:.0f}KB audio, saved to {OUT}")
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())
