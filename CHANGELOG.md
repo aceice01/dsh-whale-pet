@@ -32,8 +32,17 @@
 - 🐛 **`edgeAvailable` 未声明**：严格模式下 `ws.onerror` 赋值给未声明变量
   抛 ReferenceError，edgeSpeak 可能卡住。补声明
 - 🛡️ **poll 轮询保护 happy 状态**：任务进行中不再打断摸头/庆祝动画
+- 🐛 **install.ps1：python 缺 pyyaml 时校验崩溃**（[issue #2]）——
+  `$ErrorActionPreference = "Stop"` 下外部命令 stderr 即致命，python 存在但
+  缺 pyyaml 时 `& python ...` 抛 NativeCommandError 崩溃，fallback 不可达。
+  改为**纯 PowerShell 结构校验**（零外部依赖，彻底消除崩溃源）
+- 🐛 **install.ps1：卸载后 patch 只剩注释变无效**（[issue #2]）——
+  删除 insert 块后若剩余全是注释，YAML 解析为 null 而非顶层数组，DSH 报
+  "must be a top-level YAML array"。卸载时检测无数组项则恢复默认模板
+  （注释头 + `[]`）
 
 [issue #1]: https://github.com/aceice01/dsh-whale-pet/issues/1
+[issue #2]: https://github.com/aceice01/dsh-whale-pet/issues/2
 
 ## [0.1.0] - 2026-08-14
 

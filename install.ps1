@@ -125,7 +125,20 @@ if ($Uninstall) {
             $result = Remove-BalanceWidgetBlock $content
             if ($result.Removed) {
                 $new = $result.Text.TrimEnd()
-                if ($new -eq "") { $new = "[]" }  # keep a valid empty patch
+                # If nothing (or only comments) remains, the file would no
+                # longer be a top-level YAML array — DSH requires that. Restore
+                # the default empty-patch template (comment header + "[]").
+                $hasArrayItem = $false
+                foreach ($ln in ($new -split "\r?\n")) {
+                    $t = $ln.Trim()
+                    if ($t -ne "" -and -not $t.StartsWith("#")) {
+                        $hasArrayItem = $true
+                        break
+                    }
+                }
+                if (-not $hasArrayItem) {
+                    $new = "# Your patch layer for this dsh profile, applied after every bundle layer:`r`n# a top-level YAML array of loader patch entries (id-targeted config`r`n# overrides, disables, and insert lists; ``!!js`` expressions allowed).`r`n[]"
+                }
                 Set-Content $patch $new -Encoding UTF8 -NoNewline
                 Ok "removed balance-widget from $patch"
             } else {
@@ -199,19 +212,14 @@ foreach ($t in $SelectedTargets) {
         if ($patchContent.Length -gt 0) { $patchContent += "`r`n`r`n" }
         $patchContent += $insertBlock
         Set-Content $patch $patchContent -Encoding UTF8 -NoNewline
-        # Verify the resulting patch parses as YAML; if not, restore the backup.
-        $yamlOk = $false
-        $pyOut = & python -c "import sys,yaml; yaml.safe_load(open(sys.argv[1],encoding='utf-8')); print('OK')" $patch 2>&1
-        if ($LASTEXITCODE -eq 0 -and $pyOut -match 'OK') {
-            $yamlOk = $true
-        } else {
-            # fallback structural check (no python): ensure no "[]" placeholder
-            # is still sitting in front of our insert block
-            $raw = Get-Content $patch -Raw -Encoding UTF8
-            $yamlOk = -not ($raw -match '(?ms)^\s*\[\]\s*$' -and $raw -match '^\s*- insert:')
-        }
+        # Verify the resulting patch: pure-PowerShell structural check (no
+        # python/pyyaml dependency — avoids crashing under $ErrorActionPreference
+        # "Stop" when python exists but pyyaml is missing).
+        $raw = Get-Content $patch -Raw -Encoding UTF8
+        # valid: no leftover "[]" placeholder, and our insert block is present
+        $yamlOk = (-not ($raw -match '(?m)^\s*\[\]\s*$')) -and ($raw -match '(?m)^\s*- insert:')
         if ($yamlOk) {
-            Ok "balance-widget enabled in $patch (YAML verified)"
+            Ok "balance-widget enabled in $patch (structure verified)"
         } else {
             Fail "cordis.patch.yml may be invalid after edit!"
             if (Test-Path $bak) {
