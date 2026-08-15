@@ -1,0 +1,11 @@
+# dsh-whale-pet bundle layer: applied automatically when the package is
+# installed (package.json declares dsh.bundle.patch), i.e. a profile that
+# runs `dsh plugin --profile web add dsh-whale-pet` gets this wiring without
+# any manual cordis.patch.yml edits. Later layers (the profile's own
+# cordis.patch.yml, --patch overlays) override these rows by id.
+
+# 挂载桌宠插件行（含余额徽章 + Web 悬浮桌宠）。name 指向包自身，
+# loader 从 profile 的 node_modules 按包名解析。
+- insert:
+    - id: balance-widget
+      name: dsh-whale-pet

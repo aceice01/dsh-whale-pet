@@ -1,0 +1,57 @@
+{
+  "name": "dsh-whale-pet",
+  "version": "1.0.0",
+  "description": "🐋 DeepSeek 鲸鱼娘桌宠 — 蓝发女仆 + 鲸鱼尾动画 · 晓伊神经网络语音 · 撒娇互动 · 任务完成提醒 · 会话余额徽章（非官方同人项目）",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aceice01/dsh-whale-pet.git"
+  },
+  "homepage": "https://github.com/aceice01/dsh-whale-pet",
+  "type": "module",
+  "main": "plugin/dsh-balance-widget/lib/index.js",
+  "exports": {
+    ".": "./plugin/dsh-balance-widget/lib/index.js",
+    "./client": "./plugin/dsh-balance-widget/lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "cordis.patch.yml",
+    "docs",
+    "plugin",
+    "patch",
+    "tools",
+    "install.ps1",
+    "apply-main-patch.ps1"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "pet",
+    "whale",
+    "desktop-pet",
+    "桌宠",
+    "鲸鱼娘",
+    "balance"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
