@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "dsh-balance-widget",
+	id: "dsh-whale-pet",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
