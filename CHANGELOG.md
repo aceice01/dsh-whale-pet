@@ -20,6 +20,15 @@
 
 ### 修复
 
+- 🐛 **Web 端 client 模块 id 与包名不一致**：bundle 模式下插件以
+  `dsh-whale-pet` 包名加载，但 client.js 的模块 id 仍为 `dsh-balance-widget`，
+  导致 Web 端（浏览器）加载 client 异常、余额徽章 / 充值入口 / 悬浮桌宠
+  无法渲染。已改为与包名一致（`dsh-whale-pet`），并随 GitHub 源一键安装
+  自动生效
+- 🩹 **新增 `fix-fallback-layer.ps1`**：修复 pnpm 安装插件时 `nodeLinker:
+  hoisted` 把真实目录写入 `profiles/node_modules` 符号链接回退层、导致
+  DSH 启动报 `exists and is not a symlink` 的问题（移出真实条目，重启后
+  dsh 自动重建符号链接）
 - 🐛 **install.ps1：`cordis.patch.yml` 生成无效 YAML**（[issue #1]）——
   旧代码用 `-replace '^\s*\[\]\s*$'` 删除 `[]` 占位符，但该正则未启用
   Multiline，默认 profile（带注释头）下匹配失败，`[]` 残留导致
