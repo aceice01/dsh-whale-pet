@@ -62,7 +62,18 @@
 - **Windows**
 - 已安装 **DeepSeek Harness 桌面客户端** 和/或 **npx 版 dsh**
 
-### 一键安装
+### 方式一：DSH 插件命令（推荐，自动激活）
+
+```powershell
+dsh plugin --profile web add github:aceice01/dsh-whale-pet
+```
+
+> 无 dsh 命令时用：`npx @deepseek-ai/dsh plugin --profile web add github:aceice01/dsh-whale-pet`
+
+插件自带 `dsh.bundle` 声明，安装后**自动挂载**（余额徽章 + Web 悬浮桌宠），无需手动编辑 `cordis.patch.yml`。
+安装后**重启** DSH 桌面应用 / dsh web 服务生效。
+
+### 方式二：一键安装脚本
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
