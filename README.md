@@ -1,5 +1,6 @@
 <p align="center">
   <img src="docs/preview.png" alt="DeepSeek Whale Girl Pet" width="720">
+  <img src="docs/preview.gif" alt="DeepSeek Whale Girl Pet animated preview" width="720">
 </p>
 
 <h1 align="center">🐋 DeepSeek 鲸鱼娘桌宠</h1>
