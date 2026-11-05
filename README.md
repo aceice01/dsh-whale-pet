@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/preview.png" alt="DeepSeek Whale Girl Pet" width="720">
+  <img src="https://raw.githubusercontent.com/kingOfSoySauce/dsh-skin-market/main/site/public/skin-screenshots/aceice01__dsh-whale-pet/18fec904ec3b4fd3958b6fb8c2fa9c209679328f/home.gif" alt="DeepSeek Whale Girl Pet" width="720">
 </p>
 
 <h1 align="center">🐋 DeepSeek 鲸鱼娘桌宠</h1>
